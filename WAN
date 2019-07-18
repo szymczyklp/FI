@@ -1,0 +1,46 @@
+#PAKIETY
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(readr)
+
+#KATALOG ROBOCZY
+getwd()
+setwd("C:/Users/sqnq-D/Documents/R/FI")
+
+#WCZYTANIE DANYCH
+#wstępnie przygotowałeem plik Excel'a poprzez:
+#  1. usunięcie dwóch pierwszych wierszy oraz ostatniego wiersza ("razem")
+#  2. przekonwertowanie pliku na *.xlsx oraz połączenie danych z arkuszy
+#  3. połączenie wierszy dla funduszy wyodrębnionych w różnych grupach 
+#     a) jeżeli dane były jednym ciągiem to połączono pod jedną nazwą
+#     b) jezeli w danych była przerwa to do nazwy dodano [1] i [2], dotyczy to funduszy:
+#        - Investor Akcji (Investor FIO)
+#        warto zbadać ten przypadek dodatkowo
+WAN <- read_excel(path = "WAN.xlsx",
+                 col_names = TRUE, sheet = 1,
+                 col_types = c(rep("text",2),rep("numeric",310)))
+WAN <- as.data.frame(WAN)
+
+#WIERSZE PODSUMOWAŃ - usuwamy
+WAN <- WAN[is.na(WAN[,2]),]
+WAN[,2] <- NULL
+
+#NAZWY (nazwy funduszy jako nazwy wierszy)
+rownames(WAN) <- WAN[,1]
+WAN[,1] <- NULL
+
+#TRANSPOZYCJA
+WAN <- t(WAN)
+WAN <- as.data.frame(WAN)
+
+#DATA - interpretacja
+data <- rownames(WAN)
+data <- as.numeric(data) 
+data <- as.Date(data, origin = "1899-12-30")
+rownames(WAN) <- data
+rm(data)
+
+#ZAPIS - zapisujemy dane jako plik *.csv
+write.csv2(WAN, "WAN.csv", na = "")
+
