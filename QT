@@ -1,0 +1,79 @@
+#PAKIETY
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(readr)
+library(stringi)
+
+# KATALOG ROBOCZY
+getwd()
+setwd("C:/Users/sqnq-D/Documents/R/FI")
+
+# WCZYTANIE DANYCH
+I <- 29     #liczba zakładek sprawdzona w pliku
+for(i in 1:I){     #pętle są wolne w R, ale czasami nie da się ich uniknąć
+  tQT <- read_excel(path = "(1964-01-01 2018-04-11)Wartosci jednostek.xls",
+                    col_names = TRUE, skip = 2, sheet = i,
+                    col_types = c(rep("text",6),"date","numeric","numeric","date"))
+  if(i==1){
+    QT <- tQT
+  }else{
+    QT <- rbind(QT, tQT)
+  }
+  print(paste("załadowano arkusz ",i," z ",I))
+}
+rm(tQT,i,I)     #usuwamy zmienne tymczasowe
+QT[,c(3:5,9:10)] = NULL     #usuwam zbędne kolumny
+QT <- as.data.frame(QT)     #zmieniamy na ramkę danych
+QT$data <- as.Date(QT$data)
+#podsumowanie: tabela QT zawiera 1 834 488 linie
+
+#BRAKI DANYCH - usuwamy
+QT <- drop_na(QT, "kurs")
+#pozostało 1 820 802, czyli usunęliśmy 13 686 wpisów (0,75%)
+
+#DUPLIKATY - usuwamy (powstały w związku ze zmianami polityki funduszy)
+QT <- unique(QT)
+#pozostało 1 819 372, czyli usunęliśmy 1 430 wpisów (0,08%)
+
+#DUPLIKATY2 - niestety mamy fundusze, dla których są dwa kursy w jednej dacie 
+#- je także musimy usunąć w tych kolidujących datach, są to przypadki do sprawdzenia:
+del <- QT[duplicated(QT[,c("nazwa","data")]),]["nazwa"] %>% unique()
+del
+#1. Allianz Dochodowych Obligacji FIZ seria A
+#2. Superfund Pieniężny (Superfund SFIO Portfelowy)
+#3. Superfund Płynnościowy (EUR) (Superfund SFIO)
+#4. Superfund Płynnościowy (Superfund SFIO)
+#5. Superfund Płynnościowy (USD) (Superfund SFIO)
+QT <- QT[!duplicated(QT[,c("nazwa","data")]),]
+#pozostało 1 813 562, czyli usunęliśmy 5 804 wpisy (0,32%)
+
+#POSTAĆ TABELI
+#pozostawiamy porządane dane (data, nazwa, kurs) w wersji wąskiej
+QT <- QT[,c("nazwa","data","kurs")]
+#przekształcamy dane do wersji szerokiej
+QT <- spread(QT, nazwa, kurs)
+
+#data do nazwy wiersza
+rownames(QT) <- QT[,1]
+QT$data <- NULL
+
+#FO vs FZ
+FI <- colnames(QT)
+FI <- as.data.frame(FI)
+FI$FO <- stri_count_fixed(FI$FI, " FIO") + stri_count_fixed(FI$FI, "(FIO") + 
+  stri_count_fixed(FI$FI, " SFIO") + stri_count_fixed(FI$FI, "SFIO ") +
+  stri_count_fixed(FI$FI, " OFI") + stri_count_fixed(FI$FI, " SOFI")
+FI$FZ <- stri_count_fixed(FI$FI, " FIZ") + stri_count_fixed(FI$FI, "FIZ ") + 
+  stri_count_fixed(FI$FI, " NSFIZ") +
+  stri_count_fixed(FI$FI, " ZFI") + stri_count_fixed(FI$FI, " SFIZ")
+FI$FP <- FI$FO + FI$FZ
+
+#PODZIAŁ
+QTO <- QT[,FI$FO>0]
+QTZ <- QT[,FI$FZ>0]
+
+#ZAPIS - zapisujemy dane jako plik *.csv
+write.csv2(QT, "QT.csv", na = "")
+write.csv2(QTO, "QTO.csv", na = "")
+write.csv2(QTZ, "QTZ.csv", na = "")
